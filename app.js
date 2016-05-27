@@ -58,6 +58,10 @@ function Game () {
         this.renderGame();
     },
     setTurn = function () {
+        if (true === this._checkGameEnd()) {
+            this._endGame();
+            return;
+        }
         var $this = this,
             turnSet = false,
             setOnNextPlayer = false;
@@ -67,7 +71,7 @@ function Game () {
                 player.relinquishTurn();
                 setOnNextPlayer = true;
             }
-            else if (true === setOnNextPlayer) {
+            else if (true === setOnNextPlayer && false === player.bust && false === player.stay) {
                 player.takeTurn($this);
                 turnSet = true;
                 setOnNextPlayer = false;
@@ -87,6 +91,44 @@ function Game () {
                 this.players[0].takeTurn($this);
             }
         }
+    },
+    _checkGameEnd = function () {
+        // Check if the dealer has busted
+        var dealer = this._getDealer();
+
+        if (true === dealer.bust) {
+            return true;
+        }
+        else if (16 <= dealer.total) {
+            return true;
+        }
+
+        return false;
+    },
+    _getDealer = function () {
+        var dealer = this.players.filter(function (pl) {
+            return pl.name === 'Dealer';
+        });
+
+        return dealer[0];
+    },
+    _endGame = function () {
+         var dealer = this._getDealer();
+
+         if (true === dealer.bust) {
+             // Everyone's a winner!
+             this._renderDealerBust();
+         }
+    },
+    _renderDealerBust = function () {
+        var playerContainer = $('#players-container'),
+            arg;
+
+        playerContainer.children('div').remove();
+        this.players.forEach(function (player) {
+            arg = 'Dealer' === player.name ? 'loser' : 'winner';
+            playerContainer.append(player.renderHtml(arg));
+        });
     };
 
     return {
@@ -99,30 +141,61 @@ function Game () {
         addPlayer: addPlayer,
         startGame: startGame,
         deal: deal,
-        setTurn: setTurn
+        setTurn: setTurn,
+        _checkGameEnd: _checkGameEnd,
+        _getDealer: _getDealer,
+        _endGame: _endGame,
+        _renderDealerBust: _renderDealerBust
     }
 }
 
 function Player (name) {
-    var renderHtml = function () {
-        var html = "<div id='" + this.getHtmlId() + "'>"
-                + "<h2>" + this.name + "</h2>"
-                + this.renderCardsHtml()
-            + "</div>";
+    var renderHtml = function (arg) {
+        var html = "<div id='" + this.getHtmlId() + "'";
 
-        return html;
+        if ('undefined' === typeof arg) {
+            html += "><h2>" + this.name + "</h2>"
+                    + this._renderStatus()
+                    + this._renderCardsHtml();
+        }
+        else {
+            var divClass = 'winner' === arg ? " class='winner'>" : " class='loser'>";
+
+            html += divClass + "<h2>" + this.name + "</h2>"
+                    + this._renderStatus()
+                    + this._renderCardsHtml();
+        }
+
+        return html + "</div>";
     },
     getHtmlId = function () {
         return 'player-' + this.name.replace(' ', '-');
     },
-    renderCardsHtml = function () {
+    _renderStatus = function () {
+        var html = '';
+        if (true === this.bust) {
+            html += "<span class='bust'>Busted on " + this.total;
+        }
+        if (true === this.stay) {
+            html += "<span class='stay'>Stayed on " + this.total;
+        }
+
+        return html + "</span>";
+    },
+    _renderCardsHtml = function () {
         var html = "<div class='cards-container'>",
             card;
 
         if (0 < this.cards.length) {
             if (this.name === 'Dealer') {
-                card = 'undefined' !== typeof this.cards[0] ? this.cards[0] : '';
-                html += "<span>" + card.number + ' ' + card.suit + "</span><span>Hidden Card</span>";
+                this.cards.forEach(function (card, i) {
+                    if (0 === i) {
+                        html += "<span>" + card.number + ' ' + card.suit + "</span>";
+                    }
+                    else {
+                        html += "<span>Hidden Card</span>";
+                    }
+                });
             }
             else {
                 this.cards.forEach(function (card) {
@@ -136,16 +209,18 @@ function Player (name) {
     drawCard = function (card) {
         this.cards.push(card);
         this._total();
+
+        this.bust = 21 < this.total;
+        this.stay = 21 === this.total;
     },
     relinquishTurn = function () {
         this.currentTurn = false;
         $('#' + this.getHtmlId()).removeClass('current-turn').find('#player-turn-actions').remove();
-        console.log('relinquishing', this.name);
     },
     takeTurn = function (game) {
         this.currentTurn = true;
         $('#' + this.getHtmlId()).addClass('current-turn');
-        this.renderActionHtml(game);
+        this._renderActionHtml(game);
     },
     _renderActionHtml = function (game) {
         var playerCardsCon = $('#' + this.getHtmlId() + ' .cards-container'),
@@ -161,23 +236,26 @@ function Player (name) {
             $this._processAction(this, game);
         });
     },
+    // _renderTotalHtml = function (message) {
+    //     var totSpan = document.createElement('span');
+    //     totSpan.innerHTML = message + this.total;
+    //
+    //     $('#' + this.getHtmlId()).find('h2').after(totSpan);
+    // },
     _processAction = function (elem, game) {
         var action = elem.id;
-
         'hit' === action ? this._hit(game) : this._stay(game);
     },
     // Private methods
     _hit = function (game) {
         this.drawCard(game.deck.getCard());
-
-        console.log(this.name, this.total, this.cards);
-
+        game.renderGame();
         game.setTurn();
     },
-    _stay = function () {
+    _stay = function (game) {
         this.stay = true;
-
-        this.renderTotalHtml();
+        game.renderGame();
+        game.setTurn();
     },
     _total = function () {
         var faceCards = ['J', 'Q', 'K'],
@@ -206,13 +284,16 @@ function Player (name) {
         bust: false,
         currentTurn: false,
         listeners: {},
+        winner: false,
         renderHtml: renderHtml,
         getHtmlId: getHtmlId,
-        renderCardsHtml: renderCardsHtml,
+        _renderStatus: _renderStatus,
+        _renderCardsHtml: _renderCardsHtml,
         drawCard: drawCard,
         relinquishTurn: relinquishTurn,
         takeTurn: takeTurn,
         _renderActionHtml: _renderActionHtml,
+        // _renderTotalHtml: _renderTotalHtml,
         _processAction: _processAction,
         _hit: _hit,
         _stay: _stay,
