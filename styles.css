@@ -1,0 +1,36 @@
+/*
+ * red #DB3340
+ * gold #E8B71A
+ * tan #F7EAC8
+ * green #1FDA9A
+ * blue #28ABE3
+ */
+html * {
+    box-sizing: border-box;
+}
+h1, h2, h3, h4, h5 {
+    margin: 0;
+    line-height: 1.5em;
+}
+.main-container {
+    background-color: #E8B71A;
+    padding: 0.5%;
+    margin: 0.5%;
+}
+#game-controls {
+
+}
+#game-controls.inactive {
+    background-color: #F7EAC8;
+    opacity: 0.5;
+}
+#players-container {
+
+}
+#players-container > div {
+    padding: 1%;
+    margin: 0.5%;
+}
+#players-container > div.current-turn:not(.dealer) {
+    box-shadow: 0 0 2px 2px #28ABE3;
+}
